@@ -1,0 +1,10 @@
+{
+  "skill": "rojswap",
+  "test_cases": [
+    {"input": "run rojswap short clip test", "should_trigger": true},
+    {"input": "face swap on sunglasses nightclub video", "should_trigger": true},
+    {"input": "evidence gate for character replacement", "should_trigger": true},
+    {"input": "write a python hello world", "should_trigger": false},
+    {"input": "explain quantum computing", "should_trigger": false}
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "skill": "rojswap",
+  "test_cases": [
+    {
+      "name": "short_clip_gate",
+      "input": "Run RojSwap short-clip test on nightclub footage with sunglasses",
+      "assertions": ["reads mission card", "requires short clip before full length", "uses diffusion path as primary"]
+    },
+    {
+      "name": "reviewer_gate",
+      "input": "Review the short clip result and mark status",
+      "assertions": ["calls mission_gate", "only PROVEN if eyes and lighting are usable", "does not edit product files"]
+    },
+    {
+      "name": "pixel_vs_diffusion",
+      "input": "Which path should we use for red club lighting and sunglasses",
+      "assertions": ["recommends diffusion primary", "notes pixel path is weak on this case"]
+    }
+  ]
+}
