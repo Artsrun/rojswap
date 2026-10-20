@@ -1,15 +1,90 @@
 {
   "status": "running",
-  "iteration": 1,
+  "iteration": 2,
   "objective": "RojSwap: prove short-clip face/character replacement on nightclub footage (sunglasses + red light) before full 37 s render",
+  "protocol": "docs/COOPERATION.md",
+  "agents": {
+    "grok": "planner/research; reviews Claude's steps",
+    "claude": "worker; reviews Grok's steps",
+    "jan": "merges PRs, relays go between agents"
+  },
   "plan": [
-    "Set up short-clip test (5–10 s) + reference photo in tests/short_clip/",
-    "Optional glasses pre-pass (BiSeNet + inpaint)",
-    "Run diffusion path (Wan 2.2 Animate Replace or cloud) on short clip",
-    "Extract comparison frames and note identity / lighting / motion",
-    "Reviewer gate: only mark proven if short clip is usable"
+    {
+      "id": 1,
+      "step": "pipeline/chunk.py: frame-exact split + stitch with original audio",
+      "files": ["pipeline/chunk.py", "tests/test_chunk.py"],
+      "prover": "python3 -m unittest tests.test_chunk -v",
+      "owner": "claude",
+      "reviewer": "grok",
+      "status": "awaiting_review"
+    },
+    {
+      "id": 2,
+      "step": "pipeline/run_pixel.py: FaceFusion 3.9.1 headless wrapper with known-good presets",
+      "files": ["pipeline/run_pixel.py", "pipeline/presets.yaml"],
+      "prover": "python3 pipeline/run_pixel.py --dry-run, then a 3 s render on tests/short_clip",
+      "owner": "claude",
+      "reviewer": "grok",
+      "status": "todo"
+    },
+    {
+      "id": 3,
+      "step": "pipeline/bench.py: run N swap models on one frame, emit a labeled grid",
+      "files": ["pipeline/bench.py"],
+      "prover": "grid image with one tile per model",
+      "owner": "claude",
+      "reviewer": "grok",
+      "status": "todo"
+    },
+    {
+      "id": 4,
+      "step": "eval/: frame-grid extractor + gate notes template",
+      "files": ["eval/grid.py", "eval/notes.md"],
+      "prover": "grid from a 3 s clip",
+      "owner": "claude",
+      "reviewer": "grok",
+      "status": "todo"
+    },
+    {
+      "id": 5,
+      "step": "docs/hard_cases.md: record 2026-10-20 CPU run evidence",
+      "files": ["docs/hard_cases.md"],
+      "prover": "every number traceable to a log or grid",
+      "owner": "claude",
+      "reviewer": "grok",
+      "status": "todo"
+    },
+    {
+      "id": 6,
+      "step": "pipeline/run_diffusion.py: runnable Wan 2.2 Animate Replace call (exact model id, inputs, VRAM or API cost, link to source)",
+      "files": ["pipeline/run_diffusion.py", "docs/diffusion_path.md"],
+      "prover": "python3 pipeline/run_diffusion.py --dry-run validates inputs and prints the exact call; real 5 s run before PROVEN",
+      "owner": "grok",
+      "reviewer": "claude",
+      "status": "todo"
+    }
   ],
-  "recent_evidence": [],
+  "recent_evidence": [
+    {
+      "step": 1,
+      "by": "claude",
+      "prover": "python3 -m unittest tests.test_chunk -v",
+      "result": "8/8 OK: synthetic 37.2 s @30fps -> 5 chunks (240x4 + 156) -> stitched 1116 frames, audio present, PSNR > 30 dB vs source"
+    },
+    {
+      "step": 1,
+      "by": "claude",
+      "prover": "chunk.py split/stitch on the real 37.2 s target (local, not committed)",
+      "result": "1116 frames -> chunks 240 240 240 240 156 -> 1116 frames + audio, PSNR 48.0 dB"
+    }
+  ],
+  "known_results": {
+    "2026-10-20_cpu_facefusion": "2-core CPU, ~6 s/frame. ghost_3_256 removes sunglasses; hyperswap_1c keeps identity best but keeps glasses; box mask -> visible seam/skin-tone patch; ~60 px source face caps quality. Verdict: meme-grade, not believable."
+  },
+  "open_questions": [
+    "GPU available? (Jan's Acer Predator: which NVIDIA card / VRAM)",
+    "Diffusion path: local Wan 2.2 vs hosted API, cost per 5 s"
+  ],
   "stagnation": null,
-  "rule": "no prover → UNPROVEN, not done"
+  "rule": "no prover -> UNPROVEN, not done; reviewer != author"
 }

@@ -35,3 +35,12 @@ rojswap/
 ## Status
 
 Starter skeleton. Short-clip evaluation not yet proven.
+
+| Module | State |
+|--------|-------|
+| `pipeline/chunk.py` | Implemented — `python3 -m unittest tests.test_chunk -v` |
+| `pipeline/run_pixel.py`, `prepass_glasses.py`, `run_diffusion.py` | Stubs |
+
+## Working together
+
+Claude and Grok cooperate through PRs and the mission card — see [`docs/COOPERATION.md`](docs/COOPERATION.md).

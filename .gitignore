@@ -1,0 +1,12 @@
+# test media stays local: copyrighted footage, real faces
+tests/short_clip/*
+!tests/short_clip/README.md
+*.mp4
+*.mov
+*.png
+*.jpg
+!docs/**/*.png
+!eval/**/*.jpg
+
+__pycache__/
+.venv/
