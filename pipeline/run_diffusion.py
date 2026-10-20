@@ -11,6 +11,11 @@ Usage:
   python3 pipeline/run_diffusion.py --dry-run \\
     --character tests/short_clip/reference.png \\
     --video tests/short_clip/test.mp4
+
+  REPLICATE_API_TOKEN=... python3 pipeline/run_diffusion.py \\
+    --character tests/short_clip/reference.png \\
+    --video tests/short_clip/test.mp4 \\
+    --output artifacts/swap.mp4
 """
 
 from __future__ import annotations
@@ -20,17 +25,15 @@ import os
 import sys
 from pathlib import Path
 
-# Reuse the proven probe from chunk.py (ffprobe, frame count, duration).
-from pipeline.chunk import probe
+# Script-mode import: python3 pipeline/run_diffusion.py puts pipeline/ on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from chunk import probe  # noqa: E402
 
 MODEL_ID = "wan-video/wan-2.2-animate-replace"
 REPLICATE_URL = "https://replicate.com/wan-video/wan-2.2-animate-replace"
 HF_PAPER = "https://huggingface.co/papers/2509.14055"
 
 # Pricing: UNVERIFIED on Replicate (confirm while signed in).
-# WaveSpeed lists ~$0.20 / $0.40 per 5 s (480p / 720p).
-# One third-party Replicate integration listed ~$0.02/s (480) and ~$0.05/s (720).
-# Marked unverified until confirmed on the model page.
 COST_NOTES = "UNVERIFIED — confirm on Replicate while signed in"
 
 
@@ -53,7 +56,6 @@ def validate_inputs(character: Path, video: Path) -> dict:
         raise ValueError(f"unsupported image type: {character.suffix}")
     if video.suffix.lower() not in {".mp4", ".mov", ".webm"}:
         raise ValueError(f"unsupported video type: {video.suffix}")
-    # ffprobe must succeed — junk bytes named .mp4 fail here.
     return probe(str(video))
 
 
@@ -91,15 +93,8 @@ def real_run(character: Path, video: Path, output: Path, resolution: str) -> Non
 
     validate_inputs(character, video)
     with character.open("rb") as char_f, video.open("rb") as vid_f:
-        result = replicate.run(
-            MODEL_ID,
-            input={
-                "video": vid_f,
-                "character_image": char_f,
-                "resolution": resolution,
-                "merge_audio": True,
-            },
-        )
+        inp = {**build_input(resolution), "video": vid_f, "character_image": char_f}
+        result = replicate.run(MODEL_ID, input=inp)
     output.parent.mkdir(parents=True, exist_ok=True)
     if hasattr(result, "read"):
         output.write_bytes(result.read())
