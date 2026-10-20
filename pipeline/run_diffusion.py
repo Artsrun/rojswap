@@ -5,17 +5,12 @@ Model: wan-video/wan-2.2-animate-replace
 Docs:  https://replicate.com/wan-video/wan-2.2-animate-replace
 Paper: https://huggingface.co/papers/2509.14055
 
-Prefer 5–8 s chunks for hard footage (sunglasses, colored light).
+Prefer 5–8 s chunks for hard footage.
 
 Usage:
   python3 pipeline/run_diffusion.py --dry-run \\
     --character tests/short_clip/reference.png \\
     --video tests/short_clip/test.mp4
-
-  REPLICATE_API_TOKEN=... python3 pipeline/run_diffusion.py \\
-    --character tests/short_clip/reference.png \\
-    --video tests/short_clip/test.mp4 \\
-    --output artifacts/swap.mp4
 """
 
 from __future__ import annotations
@@ -25,23 +20,31 @@ import os
 import sys
 from pathlib import Path
 
+# Reuse the proven probe from chunk.py (ffprobe, frame count, duration).
+from pipeline.chunk import probe
+
 MODEL_ID = "wan-video/wan-2.2-animate-replace"
 REPLICATE_URL = "https://replicate.com/wan-video/wan-2.2-animate-replace"
 HF_PAPER = "https://huggingface.co/papers/2509.14055"
 
-# Approximate hosted cost (WaveSpeed / public listings, Oct 2026).
-# Confirm on the model page before a paid run.
-COST_PER_5S_480P_USD = 0.20
-COST_PER_5S_720P_USD = 0.40
+# Pricing: UNVERIFIED on Replicate (confirm while signed in).
+# WaveSpeed lists ~$0.20 / $0.40 per 5 s (480p / 720p).
+# One third-party Replicate integration listed ~$0.02/s (480) and ~$0.05/s (720).
+# Marked unverified until confirmed on the model page.
+COST_NOTES = "UNVERIFIED — confirm on Replicate while signed in"
 
 
-def estimate_cost(seconds: float, resolution: str) -> float:
-    rate = COST_PER_5S_720P_USD if resolution == "720" else COST_PER_5S_480P_USD
-    billed = max(3.0, seconds)
-    return round((billed / 5.0) * rate, 2)
+def build_input(resolution: str) -> dict:
+    """Single source of truth for the Replicate input dict."""
+    return {
+        "video": "<file>",
+        "character_image": "<file>",
+        "resolution": resolution,
+        "merge_audio": True,
+    }
 
 
-def validate_inputs(character: Path, video: Path) -> None:
+def validate_inputs(character: Path, video: Path) -> dict:
     if not character.is_file():
         raise FileNotFoundError(f"character image not found: {character}")
     if not video.is_file():
@@ -50,30 +53,31 @@ def validate_inputs(character: Path, video: Path) -> None:
         raise ValueError(f"unsupported image type: {character.suffix}")
     if video.suffix.lower() not in {".mp4", ".mov", ".webm"}:
         raise ValueError(f"unsupported video type: {video.suffix}")
+    # ffprobe must succeed — junk bytes named .mp4 fail here.
+    return probe(str(video))
 
 
-def dry_run(character: Path, video: Path, resolution: str, seconds: float) -> None:
-    validate_inputs(character, video)
-    cost = estimate_cost(seconds, resolution)
+def dry_run(character: Path, video: Path, resolution: str) -> None:
+    info = validate_inputs(character, video)
+    duration = info["duration"]
+    inp = build_input(resolution)
     print("=== RojSwap diffusion dry-run ===")
     print(f"model:      {MODEL_ID}")
     print(f"url:        {REPLICATE_URL}")
     print(f"paper:      {HF_PAPER}")
     print(f"character:  {character}")
     print(f"video:      {video}")
+    print(f"probed:     {info['frames']} frames, {info['fps']:.3f} fps, {duration:.2f} s, {info['size']}")
     print(f"resolution: {resolution}")
-    print(f"seconds:    {seconds} (billed min 3 s)")
-    print(f"est. cost:  ${cost:.2f} USD (approx, confirm on model page)")
+    print(f"cost:       {COST_NOTES}")
+    print("input dict:")
+    for k, v in inp.items():
+        print(f"  {k}: {v}")
     print("call:       replicate.run(")
     print(f"              '{MODEL_ID}',")
-    print("              input={")
-    print("                'video': <file>,")
-    print("                'character_image': <file>,")
-    print(f"                'resolution': '{resolution}',")
-    print("                'merge_audio': True,")
-    print("              }")
+    print("              input=<dict above with real files>")
     print("            )")
-    print("status:     inputs valid, dry-run OK")
+    print("status:     inputs valid (ffprobe OK), dry-run OK")
 
 
 def real_run(character: Path, video: Path, output: Path, resolution: str) -> None:
@@ -96,7 +100,6 @@ def real_run(character: Path, video: Path, output: Path, resolution: str) -> Non
                 "merge_audio": True,
             },
         )
-    # result is usually a URL or file-like
     output.parent.mkdir(parents=True, exist_ok=True)
     if hasattr(result, "read"):
         output.write_bytes(result.read())
@@ -108,17 +111,16 @@ def real_run(character: Path, video: Path, output: Path, resolution: str) -> Non
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Wan 2.2 Animate Replace runner")
-    p.add_argument("--character", required=True, type=Path, help="reference face/character image")
-    p.add_argument("--video", required=True, type=Path, help="target video (prefer 5–8 s)")
+    p.add_argument("--character", required=True, type=Path)
+    p.add_argument("--video", required=True, type=Path)
     p.add_argument("--output", type=Path, default=Path("artifacts/swap.mp4"))
     p.add_argument("--resolution", choices=["480", "720"], default="480")
-    p.add_argument("--seconds", type=float, default=5.0, help="clip length for cost estimate")
-    p.add_argument("--dry-run", action="store_true", help="validate and print call only")
+    p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
 
     try:
         if args.dry_run:
-            dry_run(args.character, args.video, args.resolution, args.seconds)
+            dry_run(args.character, args.video, args.resolution)
         else:
             real_run(args.character, args.video, args.output, args.resolution)
     except Exception as exc:

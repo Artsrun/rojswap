@@ -2,49 +2,40 @@
 
 ## Model
 
-| Item | Value |
-|------|--------|
-| Model ID | `wan-video/wan-2.2-animate-replace` |
-| Host | [Replicate](https://replicate.com/wan-video/wan-2.2-animate-replace) |
-| Paper | [Wan-Animate (HF)](https://huggingface.co/papers/2509.14055) |
-| Mode | Replace (keeps scene, camera, lighting; swaps character) |
+| Item | Value | Source |
+|------|--------|--------|
+| Model ID | `wan-video/wan-2.2-animate-replace` | [Replicate](https://replicate.com/wan-video/wan-2.2-animate-replace) |
+| Weights | Wan-AI/Wan2.2-Animate-14B | Replicate model page |
+| Paper | Wan-Animate | [HF 2509.14055](https://huggingface.co/papers/2509.14055) |
+| Mode | Replace | Keeps scene, camera, lighting |
 
-## Inputs
+## Inputs (single source)
 
-- `video` — target clip (prefer 5–8 s for hard footage)
-- `character_image` — clear reference face or character
-- `resolution` — `480` or `720`
-- `merge_audio` — `true` (experimental)
+Built once in `build_input()` and printed by `--dry-run`:
 
-## Cost (approx, Oct 2026)
+- `video`
+- `character_image`
+- `resolution` — `"480"` or `"720"`
+- `merge_audio` — `true`
 
-Confirm on the model page before a paid run.
+## Cost
 
-| Resolution | Per 5 s | 5 s clip |
-|------------|---------|----------|
-| 480p | ~$0.20 | ~$0.20 |
-| 720p | ~$0.40 | ~$0.40 |
+**UNVERIFIED on Replicate.** Confirm while signed in before a paid run.
 
-Minimum billed duration is typically 3 s.
+- WaveSpeed public listing: ~$0.20 / $0.40 per 5 s (480p / 720p).
+- One third-party Replicate integration listed ~$0.02/s (480) and ~$0.05/s (720) per output second.
+- Dry-run now probes actual duration via `pipeline/chunk.py` `probe()` (ffprobe). Cost is not estimated from a hardcoded `--seconds`.
 
-## VRAM (local alternative)
+## VRAM
 
-The 14B Animate weights need a high-end GPU (24 GB+ with offload, 40 GB+ comfortable).  
-For the short-clip gate, the hosted Replicate path is the practical first test.
+**UNVERIFIED.** Local 14B Animate typically needs a high-end GPU; exact offload numbers are not cited here. Hosted path is the practical first test.
 
 ## Prover
 
 ```bash
-# Dry-run (no token, no cost)
 python3 pipeline/run_diffusion.py --dry-run \
   --character tests/short_clip/reference.png \
   --video tests/short_clip/test.mp4
-
-# Real 5 s run (requires REPLICATE_API_TOKEN)
-REPLICATE_API_TOKEN=... python3 pipeline/run_diffusion.py \
-  --character tests/short_clip/reference.png \
-  --video tests/short_clip/test.mp4 \
-  --output artifacts/swap_5s.mp4
 ```
 
-Real run is required before the step can be marked PROVEN.
+Junk bytes named `.mp4` now fail (ffprobe). Real 5 s run still required before PROVEN.
