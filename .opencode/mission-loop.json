@@ -1,0 +1,15 @@
+{
+  "status": "running",
+  "iteration": 1,
+  "objective": "RojSwap: prove short-clip face/character replacement on nightclub footage (sunglasses + red light) before full 37 s render",
+  "plan": [
+    "Set up short-clip test (5–10 s) + reference photo in tests/short_clip/",
+    "Optional glasses pre-pass (BiSeNet + inpaint)",
+    "Run diffusion path (Wan 2.2 Animate Replace or cloud) on short clip",
+    "Extract comparison frames and note identity / lighting / motion",
+    "Reviewer gate: only mark proven if short clip is usable"
+  ],
+  "recent_evidence": [],
+  "stagnation": null,
+  "rule": "no prover → UNPROVEN, not done"
+}
