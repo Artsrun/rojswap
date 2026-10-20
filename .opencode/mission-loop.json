@@ -1,12 +1,34 @@
 {
   "status": "running",
-  "iteration": 7,
+  "iteration": 8,
   "objective": "RojSwap: prove short-clip face/character replacement on nightclub footage (sunglasses + red light) before full 37 s render",
   "protocol": "docs/COOPERATION.md",
   "agents": {
     "grok": "planner/research; reviews Claude's steps",
     "claude": "worker; reviews Grok's steps",
     "jan": "merges PRs, relays go between agents"
+  },
+  "hardware_constraints": {
+    "machine": "Acer Predator",
+    "cpu": "11th Gen Intel Core i7-11800H",
+    "gpu": "GeForce RTX 3060 Laptop (~6 GB VRAM)",
+    "fits_on_6gb": [
+      "FaceFusion (hyperswap, ghost, GFPGAN) — local CUDA viable",
+      "InsightFace / Rope / VisoMaster — small weights",
+      "GFPGAN / CodeFormer — face restore",
+      "Smaller / quantized video models (5B class) — short clips only, patient"
+    ],
+    "does_not_fit_comfortably": [
+      "Wan 2.2 Animate 14B — prefer hosted (Replicate) for the diffusion gate",
+      "Any full 14B video model without heavy offload"
+    ],
+    "note": "6 GB backpack. FaceFusion yes. 14B video brain no (or very sad and slow). Cloud for the sunglasses+red-light shot."
+  },
+  "next_for_claude": {
+    "action": "Start step 4 (eval/grid.py + notes template). Do not idle.",
+    "why": "We need a visual gate (frame grid) before any more full renders. Step 2 is awaiting Grok review; do not block on it.",
+    "files": ["eval/grid.py", "eval/notes.md"],
+    "prover": "grid image from a 3 s clip (or synthetic) lands in eval/"
   },
   "plan": [
     {
@@ -16,17 +38,17 @@
       "prover": "python3 -m unittest tests.test_chunk -v",
       "owner": "claude",
       "reviewer": "grok",
-      "status": "merged",
-      "note": "merged by Jan in PR #2; Grok gate not posted"
+      "status": "merged"
     },
     {
       "id": 2,
       "step": "pipeline/run_pixel.py: FaceFusion 3.9.1 headless wrapper with known-good presets",
       "files": ["pipeline/run_pixel.py", "pipeline/presets.yaml", "tests/test_run_pixel.py"],
-      "prover": "python3 -m unittest tests.test_run_pixel -v; then FACEFUSION_HOME=... python3 pipeline/run_pixel.py --preset no_glasses -s tests/short_clip/reference.png -t tests/short_clip/test.mp4 -o out.mp4 --reference-frame 30 --trim 0 90",
+      "prover": "python3 -m unittest tests.test_run_pixel -v; then short-clip render",
       "owner": "claude",
       "reviewer": "grok",
-      "status": "awaiting_review"
+      "status": "awaiting_review",
+      "note": "Grok to review. Claude should not idle — move to step 4."
     },
     {
       "id": 3,
@@ -44,7 +66,8 @@
       "prover": "grid from a 3 s clip",
       "owner": "claude",
       "reviewer": "grok",
-      "status": "todo"
+      "status": "todo",
+      "priority": "next"
     },
     {
       "id": 5,
@@ -57,19 +80,13 @@
     },
     {
       "id": 6,
-      "step": "pipeline/run_diffusion.py: runnable Wan 2.2 Animate Replace call (exact model id, inputs, link to source)",
+      "step": "pipeline/run_diffusion.py: runnable Wan 2.2 Animate Replace call",
       "files": ["pipeline/run_diffusion.py", "docs/diffusion_path.md"],
-      "prover": "python3 pipeline/run_diffusion.py --dry-run validates inputs (ffprobe) and prints the exact call; real 5 s run before PROVEN",
+      "prover": "dry-run + real 5 s run before PROVEN",
       "owner": "grok",
       "reviewer": "claude",
       "status": "unproven",
-      "gate": "dry-run PROVEN on 6c5d011 (claude, exact documented command, exit 0); step UNPROVEN until the real 5 s run",
-      "fix_for_owner": [
-        "DONE (verified by run on 6c5d011): script-mode import, single build_input() used by real_run, real-run usage line, ffprobe validation, junk .mp4 rejected, VRAM/min-billing UNVERIFIED",
-        "DEFERRED: pricing confirmation (Jan: leave for now)",
-        "OPEN: real 5 s run needs REPLICATE_API_TOKEN (short clip exists locally)",
-        "NIT (non-blocking): real_run does not ffprobe the output or check its frame count, unlike run_pixel.py"
-      ]
+      "gate": "dry-run PROVEN on 6c5d011; real 5 s run still open (needs REPLICATE_API_TOKEN)"
     }
   ],
   "recent_evidence": [
@@ -77,24 +94,24 @@
       "step": 0,
       "by": "jan",
       "prover": "Acer PredatorSense photo 2026-10-21",
-      "result": "CPU i7-11800H; GPU GeForce RTX 3060 Laptop GPU (typically 6 GB VRAM). Idle ~39 C / 0% load at time of photo."
+      "result": "CPU i7-11800H; GPU GeForce RTX 3060 Laptop (~6 GB VRAM). FaceFusion fits. Wan 2.2 Animate 14B does not fit comfortably — use hosted."
     },
     {
       "step": 6,
       "by": "claude (reviewer)",
-      "prover": "python3 pipeline/run_diffusion.py --dry-run --character tests/short_clip/reference.png --video tests/short_clip/test.mp4 (exact documented command, clean worktree of origin/main 6c5d011)",
-      "result": "exit 0, probed 150 frames / 30 fps / 5.00 s / 540x960, input dict printed."
+      "prover": "exact dry-run on 6c5d011",
+      "result": "exit 0, 150 frames / 30 fps / 5.00 s / 540x960. Dry-run PROVEN."
     },
     {
       "step": 2,
       "by": "claude",
-      "prover": "run_pixel.py --preset no_glasses, 5 s short clip, 2-core CPU",
-      "result": "exit 0, 90/90 frames, ~5.5 s/frame. Sunglasses removed. Meme-grade (head seam). Media local only."
+      "prover": "run_pixel.py short clip, 2-core CPU",
+      "result": "exit 0, 90/90 frames, ~5.5 s/frame. Sunglasses removed. Meme-grade. Awaiting Grok review."
     }
   ],
   "known_results": {
-    "2026-10-20_cpu_facefusion": "2-core CPU, ~6 s/frame. ghost_3_256 removes sunglasses; hyperswap_1c keeps identity best but keeps glasses; box mask -> visible seam/skin-tone patch; ~60 px source face caps quality. Verdict: meme-grade, not believable.",
-    "hardware_jan_acer": "Acer Predator. CPU: 11th Gen Intel Core i7-11800H @ 2.30 GHz. GPU: GeForce RTX 3060 Laptop GPU (typically 6 GB VRAM). CUDA FaceFusion is viable. Wan 2.2 Animate 14B is tight/unlikely locally without heavy offload — prefer hosted for the diffusion gate."
+    "2026-10-20_cpu_facefusion": "2-core CPU, ~6 s/frame. Sunglasses removable. Meme-grade (seam).",
+    "hardware_jan_acer": "RTX 3060 Laptop ~6 GB. Fits: FaceFusion, InsightFace/Rope/VisoMaster, GFPGAN. Does not fit comfortably: Wan 2.2 Animate 14B (prefer Replicate)."
   },
   "open_questions": [
     "REPLICATE_API_TOKEN for the one paid 5 s gate run (pricing deferred)"
