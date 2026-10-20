@@ -1,6 +1,6 @@
 {
   "status": "running",
-  "iteration": 2,
+  "iteration": 3,
   "objective": "RojSwap: prove short-clip face/character replacement on nightclub footage (sunglasses + red light) before full 37 s render",
   "protocol": "docs/COOPERATION.md",
   "agents": {
@@ -12,16 +12,23 @@
     {
       "id": 1,
       "step": "pipeline/chunk.py: frame-exact split + stitch with original audio",
-      "files": ["pipeline/chunk.py", "tests/test_chunk.py"],
+      "files": [
+        "pipeline/chunk.py",
+        "tests/test_chunk.py"
+      ],
       "prover": "python3 -m unittest tests.test_chunk -v",
       "owner": "claude",
       "reviewer": "grok",
-      "status": "awaiting_review"
+      "status": "merged",
+      "note": "merged by Jan in PR #2; Grok gate not posted"
     },
     {
       "id": 2,
       "step": "pipeline/run_pixel.py: FaceFusion 3.9.1 headless wrapper with known-good presets",
-      "files": ["pipeline/run_pixel.py", "pipeline/presets.yaml"],
+      "files": [
+        "pipeline/run_pixel.py",
+        "pipeline/presets.yaml"
+      ],
       "prover": "python3 pipeline/run_pixel.py --dry-run, then a 3 s render on tests/short_clip",
       "owner": "claude",
       "reviewer": "grok",
@@ -30,7 +37,9 @@
     {
       "id": 3,
       "step": "pipeline/bench.py: run N swap models on one frame, emit a labeled grid",
-      "files": ["pipeline/bench.py"],
+      "files": [
+        "pipeline/bench.py"
+      ],
       "prover": "grid image with one tile per model",
       "owner": "claude",
       "reviewer": "grok",
@@ -39,7 +48,10 @@
     {
       "id": 4,
       "step": "eval/: frame-grid extractor + gate notes template",
-      "files": ["eval/grid.py", "eval/notes.md"],
+      "files": [
+        "eval/grid.py",
+        "eval/notes.md"
+      ],
       "prover": "grid from a 3 s clip",
       "owner": "claude",
       "reviewer": "grok",
@@ -48,7 +60,9 @@
     {
       "id": 5,
       "step": "docs/hard_cases.md: record 2026-10-20 CPU run evidence",
-      "files": ["docs/hard_cases.md"],
+      "files": [
+        "docs/hard_cases.md"
+      ],
       "prover": "every number traceable to a log or grid",
       "owner": "claude",
       "reviewer": "grok",
@@ -57,14 +71,32 @@
     {
       "id": 6,
       "step": "pipeline/run_diffusion.py: runnable Wan 2.2 Animate Replace call (exact model id, inputs, VRAM or API cost, link to source)",
-      "files": ["pipeline/run_diffusion.py", "docs/diffusion_path.md"],
+      "files": [
+        "pipeline/run_diffusion.py",
+        "docs/diffusion_path.md"
+      ],
       "prover": "python3 pipeline/run_diffusion.py --dry-run validates inputs and prints the exact call; real 5 s run before PROVEN",
       "owner": "grok",
       "reviewer": "claude",
-      "status": "todo"
+      "status": "unproven",
+      "gate": "UNPROVEN (claude review of 87b424c)",
+      "fix_for_owner": [
+        "cost: estimate from the probed video duration (pipeline/chunk.py probe), not --seconds; a 37 s clip currently prints $0.20",
+        "validate: ffprobe the video (corrupt file named .mp4 passes as \"inputs valid\")",
+        "single source: build the input dict once and print that exact dict in --dry-run",
+        "pricing: WaveSpeed figures ($0.20/$0.40 per 5 s) are not Replicate prices; one third-party Replicate integration lists $0.02/s (480) and $0.05/s (720) per output second; confirm on Replicate while signed in, cite it",
+        "VRAM claim (24 GB+ offload / 40 GB+) and \"billed min 3 s\": cite a source or mark unverified",
+        "process: next step via grok/<step> branch + PR, and update this card"
+      ]
     }
   ],
   "recent_evidence": [
+    {
+      "step": 6,
+      "by": "claude (reviewer)",
+      "prover": "python3 pipeline/run_diffusion.py --dry-run --character tests/short_clip/reference.png --video tests/short_clip/test.mp4",
+      "result": "exit 0, prints call. Edge: 37 s video -> est $0.20 (uses --seconds default 5); junk bytes named .mp4 -> \"inputs valid\"; no token -> clean error exit 1. Verified: model page exists (official wan-video, weights Wan-AI/Wan2.2-Animate-14B), paper 2509.14055 = Wan-Animate, input names video/character_image/resolution \"480\"|\"720\"/merge_audio match a 3rd-party integration. Not verified: Replicate price, VRAM, min billing. Real 5 s run: not done (needs REPLICATE_API_TOKEN)."
+    },
     {
       "step": 1,
       "by": "claude",
@@ -83,7 +115,7 @@
   },
   "open_questions": [
     "GPU available? (Jan's Acer Predator: which NVIDIA card / VRAM)",
-    "Diffusion path: local Wan 2.2 vs hosted API, cost per 5 s"
+    "REPLICATE_API_TOKEN: Jan to provide as a secret for the one paid 5 s gate run (~$0.10-0.20 at 480p, price unconfirmed)"
   ],
   "stagnation": null,
   "rule": "no prover -> UNPROVEN, not done; reviewer != author"
