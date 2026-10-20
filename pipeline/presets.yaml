@@ -1,0 +1,65 @@
+# FaceFusion 3.9.1 presets for pipeline/run_pixel.py
+#
+# Keys under `args` map 1:1 to FaceFusion CLI flags: face_swapper_model -> --face-swapper-model.
+# Lists become multiple values. Every preset is merged over `_base`.
+#
+# `status`  : tested-cpu | experimental
+# `evidence`: what was actually observed. No adjectives without a run behind them.
+# All evidence below: 2026-10-20, 2-core CPU, ~6 s/frame, 540x960 target with a ~60-120 px face,
+# nightclub footage with sunglasses + red light. Overall verdict of that run: meme-grade, not believable.
+
+_base:
+  args:
+    processors: [face_swapper, face_enhancer]
+    face_selector_mode: reference
+    reference_face_distance: 0.3     # strict: kept bald bystanders untouched in the 37 s run
+    face_tracker_score: 0.3          # fills single-frame detection misses
+    face_enhancer_model: gfpgan_1.4
+    face_enhancer_blend: 70
+    output_video_encoder: libx264
+    output_video_quality: 90
+    output_video_preset: medium
+
+presets:
+  no_glasses:
+    status: tested-cpu
+    description: Removes sunglasses; strongest "your face" look, roughest blend.
+    evidence: >-
+      37 s full run: glasses removed on most frames where the face is visible; kept on
+      head-down, hand-over-face and phone-occluded frames. Visible seam and skin-tone patch
+      on a bald head (box mask). Thin glasses-arm remnant near the ear on some frames.
+    args:
+      face_swapper_model: ghost_3_256
+      face_mask_types: [box]
+
+  identity:
+    status: tested-cpu
+    description: Best likeness; sunglasses turn semi-transparent (eyes visible), not removed.
+    evidence: >-
+      3 s pilot (P1) + stills: strongest identity of 11 swap models tested on one frame;
+      glasses frame and tint remain.
+    args:
+      face_swapper_model: hyperswap_1c_256
+      face_swapper_pixel_boost: 256x256
+      face_mask_types: [box]
+
+  glasses_kept:
+    status: tested-cpu
+    description: Keeps sunglasses solid; hands and phones in front of the face stay on top.
+    evidence: >-
+      3 s pilot (P2) + stills: xseg_1/2/3 occluders all treat sunglasses as occlusion, so the
+      lenses stay; blocky lens edge visible.
+    args:
+      face_swapper_model: hyperswap_1c_256
+      face_swapper_pixel_boost: 256x256
+      face_mask_types: [box, occlusion]
+      face_occluder_model: xseg_1
+
+  no_glasses_region:
+    status: experimental
+    description: no_glasses with a skin-region mask + softer edge, aimed at the box seam. Untested.
+    evidence: none yet
+    args:
+      face_swapper_model: ghost_3_256
+      face_mask_types: [box, region]
+      face_mask_blur: 0.5
