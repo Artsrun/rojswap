@@ -41,6 +41,7 @@ Starter skeleton. Short-clip evaluation not yet proven.
 | `pipeline/chunk.py` | Implemented — `python3 -m unittest tests.test_chunk -v` |
 | `pipeline/run_pixel.py` + `presets.yaml` | Implemented — `python3 -m unittest tests.test_run_pixel -v`; real render needs FaceFusion (`FACEFUSION_HOME`) |
 | `pipeline/run_diffusion.py` | Dry-run only, real run unproven |
+| `eval/grid.py` | Implemented — `python3 -m unittest tests.test_grid -v`; original + swap rows, aligned columns |
 | `pipeline/prepass_glasses.py` | Stub |
 
 ## Working together
