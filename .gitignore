@@ -8,5 +8,6 @@ tests/short_clip/*
 !docs/**/*.png
 !eval/**/*.jpg
 
+artifacts/
 __pycache__/
 .venv/
