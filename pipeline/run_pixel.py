@@ -8,7 +8,7 @@
 
 FaceFusion is not vendored. Point the wrapper at an install:
   FACEFUSION_HOME    dir containing facefusion.py          (or --facefusion-home)
-  FACEFUSION_PYTHON  its interpreter, default $FACEFUSION_HOME/.venv/bin/python
+  FACEFUSION_PYTHON  its interpreter, default $FACEFUSION_HOME/.venv/bin/python (Windows: .venv\\Scripts\\python.exe)
 
 Install tested on CPU (2026-10-20):
   git clone --depth 1 --branch 3.9.1 https://github.com/facefusion/facefusion
@@ -116,9 +116,14 @@ def validate(sources: list[str], target_info: dict, reference_frame: int | None,
     return frames
 
 
+def venv_python(home: str, windows: bool = os.name == "nt") -> str:
+    """Interpreter inside $home/.venv: Scripts/python.exe on Windows, bin/python elsewhere."""
+    return str(Path(home) / ".venv" / ("Scripts/python.exe" if windows else "bin/python"))
+
+
 def resolve_facefusion(home: str | None, python: str | None) -> tuple[str, str]:
     home = home or os.environ.get("FACEFUSION_HOME", "")
-    python = python or os.environ.get("FACEFUSION_PYTHON") or str(Path(home) / ".venv" / "bin" / "python")
+    python = python or os.environ.get("FACEFUSION_PYTHON") or venv_python(home)
     return home, python
 
 

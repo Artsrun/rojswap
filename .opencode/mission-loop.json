@@ -1,6 +1,6 @@
 {
   "status": "running",
-  "iteration": 11,
+  "iteration": 12,
   "objective": "RojSwap: prove short-clip face/character replacement on nightclub footage (sunglasses + red light) before full ~30 s render",
   "protocol": "docs/COOPERATION.md",
   "agents": {
@@ -56,8 +56,8 @@
     ]
   },
   "next_for_claude": {
-    "action": "While REPLICATE_API_TOKEN is pending: real FaceFusion CUDA render on Jan's RTX 3060 (step 2 preset) of the 5-8 s short clip, grid it with eval/grid.py, score in eval/notes.md as the baseline.",
-    "why": "Gives step 7 a baseline to beat and gives Grok real evidence for the step 2 review.",
+    "action": "Wait for Jan's baseline grid + notes entry, then score C1-C5 with Jan. Meanwhile: none queued; ask Jan before starting prepass_glasses.",
+    "why": "Baseline is a run on Jan's machine; scoring needs the real grid.",
     "files": ["eval/notes.md"],
     "prover": "eval/<date>_pixel_grid.jpg + scored run entry"
   },
@@ -91,6 +91,16 @@
       "status": "awaiting_review"
     },
     {
+      "id": 8,
+      "step": "pipeline/baseline.py: one-command pixel baseline (cut window -> FaceFusion per preset -> grid -> notes entry)",
+      "files": ["pipeline/baseline.py", "tests/test_baseline.py", "pipeline/run_pixel.py"],
+      "prover": "python3 -m unittest tests.test_baseline -v (fake FaceFusion); real: Jan runs it on the RTX 3060",
+      "owner": "claude",
+      "reviewer": "grok",
+      "status": "awaiting_review",
+      "note": "run_pixel now resolves .venv\\Scripts\\python.exe on Windows."
+    },
+    {
       "id": 6,
       "step": "pipeline/run_diffusion.py: runnable Wan 2.2 Animate Replace call",
       "files": ["pipeline/run_diffusion.py", "docs/diffusion_path.md"],
@@ -113,6 +123,12 @@
     }
   ],
   "recent_evidence": [
+    {
+      "step": 8,
+      "by": "claude (author)",
+      "prover": "python3 -m unittest tests.test_baseline -v; full chain on a 10 s testsrc2 target, --start 2 --seconds 6, 3 presets, fake FaceFusion",
+      "result": "8/8 tests OK; full suite 37 passed. clip 180 frames + audio; each preset 180/180 frames; 4-row grid; notes entry appended with indices + s/frame."
+    },
     {
       "step": 0,
       "by": "claude",
@@ -154,5 +170,10 @@
     "REPLICATE_API_TOKEN for the one paid 5–8 s gate run (step 7). Pricing deferred. Fallbacks documented if delayed."
   ],
   "stagnation": null,
-  "rule": "no prover -> UNPROVEN, not done; reviewer != author"
+  "rule": "no prover -> UNPROVEN, not done; reviewer != author",
+  "next_for_jan": {
+    "action": "On the Acer: python pipeline/baseline.py -s <white-tshirt still>.png -t tests/short_clip/test.mp4 --providers cuda --presets no_glasses identity glasses_kept",
+    "needs": "FaceFusion 3.9.1 with CUDA onnxruntime (python install.py --onnxruntime cuda), FACEFUSION_HOME set",
+    "then": "commit eval/<date>_pixel_grid.jpg + the notes entry, or paste the grid here"
+  }
 }
