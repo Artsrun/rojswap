@@ -8,8 +8,10 @@ import io
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipeline"))
 import baseline  # noqa: E402
@@ -55,7 +57,9 @@ class WindowTest(unittest.TestCase):
         self.assertTrue(run_pixel.venv_python("ff", windows=False).endswith(str(Path(".venv/bin/python"))))
 
 
-class BaselineTest(unittest.TestCase):
+class MediaCase(unittest.TestCase):
+    """Shared fixtures: 4 s target with audio, reference png, fake FaceFusion."""
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
@@ -80,6 +84,8 @@ class BaselineTest(unittest.TestCase):
         return ["--out-dir", str(self.dir / name), "--grid", str(self.dir / f"{name}.jpg"),
                 "--notes", str(self.dir / f"{name}.md")]
 
+
+class BaselineTest(MediaCase):
     def test_full_chain(self):
         code, out, err = run_cli("-s", str(self.ref), "-t", str(self.target), "--start", "1", "--seconds", "2",
                                  "--presets", "no_glasses", "identity", "--reference-frame", "10",
@@ -134,6 +140,90 @@ class BaselineTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("preset no_glasses failed", err)
         self.assertFalse((self.dir / "broken_run.md").exists())
+
+
+class FakeReplicate:
+    """Stands in for the replicate package: Wan-like 16 fps output, records the call. No network, no cost."""
+
+    def __init__(self):
+        self.calls = []
+        self.module = types.ModuleType("replicate")
+        self.module.run = self.run
+
+    def run(self, model, input):
+        self.calls.append((model, {k: getattr(v, "name", v) for k, v in input.items()}))
+        out = Path(input["video"].name).with_name("fake_wan.mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", input["video"].name, "-vf", "hue=h=200,fps=16",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)], check=True)
+        return io.BytesIO(out.read_bytes())
+
+
+class DiffusionTest(MediaCase):
+    def setUp(self):
+        self.fake = FakeReplicate()
+        patches = [mock.patch.dict(sys.modules, {"replicate": self.fake.module}),
+                   mock.patch.dict("os.environ", {"REPLICATE_API_TOKEN": "r8_fake"})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def run_gate(self, name, *extra):
+        return run_cli("-s", str(self.ref), "-t", str(self.target), "--start", "1", "--seconds", "2",
+                       "--frames", "4", *self.paths(name), *self.ff_args, *extra)
+
+    def test_pixel_plus_wan_row(self):
+        code, _, err = self.run_gate("gate", "--presets", "identity", "--diffusion")
+        self.assertEqual(code, 0, err)
+        [(model, inp)] = self.fake.calls
+        self.assertEqual(model, "wan-video/wan-2.2-animate-replace")
+        self.assertEqual(inp["video"], str(self.dir / "gate" / "clip.mp4"))  # same clip as the pixel rows
+        self.assertEqual(inp["character_image"], str(self.ref))
+        self.assertEqual(inp["resolution"], "480")
+        wan = baseline.probe(str(self.dir / "gate" / "wan_animate.mp4"))
+        self.assertEqual(round(wan["fps"]), 16)
+        notes = (self.dir / "gate.md").read_text()
+        self.assertIn("pixel + diffusion — FaceFusion identity; wan-video/wan-2.2-animate-replace", notes)
+        self.assertIn("Row 3     ", notes)
+        self.assertIn("wan_animate:", notes)
+
+    def test_wan_only(self):
+        code, _, err = self.run_gate("wan_only", "--presets", "--diffusion", "--resolution", "720")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.fake.calls[0][1]["resolution"], "720")
+        self.assertIn("— diffusion — wan-video", (self.dir / "wan_only.md").read_text())
+
+    def test_dry_run_spends_nothing(self):
+        code, out, err = self.run_gate("gate_dry", "--diffusion", "--dry-run")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.fake.calls, [])
+        self.assertIn("wan:     wan-video/wan-2.2-animate-replace @ 480p", out)
+        self.assertIn("REPLICATE_API_TOKEN set", out)
+        self.assertIn("(4 rows x 4)", out)
+
+    def test_guards_before_any_work(self):
+        cases = {
+            "long window": (["--seconds", "3.9", "--start", "0", "--diffusion"], {}, "cut <= 10"),
+            "no token": (["--diffusion"], {"REPLICATE_API_TOKEN": ""}, "REPLICATE_API_TOKEN is not set"),
+            "nothing to run": (["--presets"], {}, "nothing to run"),
+        }
+        with mock.patch.object(baseline, "MAX_PAID_SECONDS", 3.0):
+            for name, (extra, env, msg) in cases.items():
+                with mock.patch.dict("os.environ", env):
+                    code, _, err = self.run_gate(f"guard_{name.replace(' ', '_')}", *extra)
+                self.assertEqual(code, 1, name)
+                self.assertIn(msg if name != "long window" else "cut <= 3", err, name)
+                self.assertFalse((self.dir / f"guard_{name.replace(' ', '_')}").exists(), name)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_pixel_failure_skips_paid_run(self):
+        broken = self.dir / "broken_ff"
+        broken.mkdir(exist_ok=True)
+        (broken / "facefusion.py").write_text("import sys; sys.exit(3)\n")
+        code, _, err = run_cli("-s", str(self.ref), "-t", str(self.target), "--seconds", "1", "--diffusion",
+                               *self.paths("broken_gate"), "--facefusion-home", str(broken),
+                               "--facefusion-python", sys.executable)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.fake.calls, [])
 
 
 if __name__ == "__main__":
