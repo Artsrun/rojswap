@@ -50,6 +50,7 @@ presets:
       3 s pilot (P2) + stills: xseg_1/2/3 occluders all treat sunglasses as occlusion, so the
       lenses stay; blocky lens edge visible.
     args:
+      processors: [face_swapper]
       face_swapper_model: hyperswap_1c_256
       face_swapper_pixel_boost: 256x256
       face_mask_types: [box, occlusion]
@@ -98,6 +99,7 @@ presets:
       none yet. Target: the blocky xseg lens edge seen in glasses_kept. Trade-off: no occluder,
       so hands and phones in front of the face are not protected.
     args:
+      processors: [face_swapper]
       face_swapper_model: hyperswap_1c_256
       face_swapper_pixel_boost: 256x256
       face_mask_types: [box, region]

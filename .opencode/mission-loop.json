@@ -210,7 +210,7 @@
   },
   "open_questions": [
     "REPLICATE_API_TOKEN for the one paid 5–8 s gate run (step 7). Pricing deferred. Fallbacks documented if delayed.",
-    "If a clip is ever monetised: hyperswap is ResearchRAIL, codeformer S-Lab-1.0. Clean stack = ghost + gfpgan/restoreformer++ + bisenet (docs/harvest_live3d.md)."
+    "Commercial clearance remains unresolved for the full model chain: arcface_w600k_r50 face embeddings are Non-Commercial; review all model terms before monetisation. Candidate stack: ghost + gfpgan/restoreformer++ + bisenet (docs/harvest_live3d.md)."
   ],
   "stagnation": null,
   "rule": "no prover -> UNPROVEN, not done; reviewer != author",
@@ -218,6 +218,6 @@
     "action": "On the Acer: python pipeline/baseline.py -s <white-tshirt still>.png -t <nightclub.mp4> --start <s> --seconds 6 --reference-frame <n> --providers cuda --presets no_glasses identity --diffusion (run with --dry-run first)",
     "needs": "FaceFusion 3.9.1 CUDA + FACEFUSION_HOME; REPLICATE_API_TOKEN (setx) + pip install replicate",
     "then": "paste eval/<date>_gate_grid.jpg + the notes entry here (real faces: do not commit)",
-    "optional": "same command with --presets no_glasses identity hard_angle identity_codeformer glasses_region to score the step 9 presets in one grid"
+    "optional": "same command with --presets no_glasses identity hard_angle identity_codeformer glasses_kept glasses_region to score the step 9 presets in one grid"
   }
 }

@@ -26,7 +26,7 @@ All flags exist in FaceFusion 3.9.1 (checked in source, see PR prover). Queued a
 |--------|-----------|----------|-----|
 | `hard_angle` | `identity`: `hyperswap_1a_256` instead of `1c` | head-down / phone frames where glasses stayed | UNPROVEN |
 | `identity_codeformer` | `identity`: CodeFormer, `--face-enhancer-weight 0.7` instead of GFPGAN | C3 plastic sheen under red light | UNPROVEN |
-| `glasses_region` | `glasses_kept`: BiSeNet parser mask minus `glasses` instead of xseg | blocky xseg lens edge | UNPROVEN |
+| `glasses_region` | `glasses_kept`: BiSeNet parser mask minus `glasses` instead of xseg; enhancement disabled in both for a matched comparison | blocky xseg lens edge | UNPROVEN |
 
 Knobs worth one grid row each later, not presets yet:
 
@@ -56,13 +56,14 @@ Not legal advice; re-check before monetising.
 | hyperswap_1a/1b/1c_256 | ResearchRAIL | `identity`, `glasses_kept`, `hard_angle`, `identity_codeformer`, `glasses_region` |
 | ghost_1/2/3_256 | Apache-2.0 | `no_glasses`, `no_glasses_region` |
 | inswapper_128 | Non-Commercial | — |
+| arcface_w600k_r50 | Non-Commercial | Face embeddings |
 | gfpgan_1.4 | Apache-2.0 | `_base` |
 | codeformer | S-Lab-1.0 | `identity_codeformer` |
 | restoreformer_plus_plus | Apache-2.0 | — |
 | xseg_1/2/3 | GPL-3.0 | `glasses_kept` |
 | bisenet_resnet_18/34 | MIT | `glasses_region`, `no_glasses_region` |
 
-If a clip is ever monetised, the cleanest stack is ghost + gfpgan / restoreformer++ + bisenet. Hyperswap's ResearchRAIL terms need reading first.
+No stack is cleared for commercial use yet. Even a candidate ghost + gfpgan / restoreformer++ + bisenet stack depends on the `arcface_w600k_r50` face-embedding model, marked Non-Commercial; review licensing for the complete model chain before monetisation.
 
 ## Skip
 
