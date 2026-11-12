@@ -63,3 +63,43 @@ presets:
       face_swapper_model: ghost_3_256
       face_mask_types: [box, region]
       face_mask_blur: 0.5
+
+  # --- Live3D harvest (docs/harvest_live3d.md). Each changes ONE thing vs the preset it names,
+  # so a grid row can be blamed on that change. Values checked against FaceFusion 3.9.1 source.
+
+  hard_angle:
+    status: experimental
+    description: identity with hyperswap_1a_256 instead of 1c, for head-down / phone-occluded frames.
+    evidence: >-
+      none yet. Target: the frames where no_glasses kept the glasses (head-down, hand-over-face,
+      phone). 1a was not in the 11-model still test.
+    args:
+      face_swapper_model: hyperswap_1a_256
+      face_swapper_pixel_boost: 256x256
+      face_mask_types: [box]
+
+  identity_codeformer:
+    status: experimental
+    description: identity with CodeFormer (fidelity 0.7) instead of GFPGAN 1.4, aimed at C3 plastic sheen.
+    evidence: >-
+      none yet. CodeFormer licence is S-Lab-1.0 (non-commercial); Apache-2.0 alternative is
+      restoreformer_plus_plus.
+    args:
+      face_swapper_model: hyperswap_1c_256
+      face_swapper_pixel_boost: 256x256
+      face_mask_types: [box]
+      face_enhancer_model: codeformer
+      face_enhancer_weight: 0.7
+
+  glasses_region:
+    status: experimental
+    description: glasses_kept with a BiSeNet face-parser mask minus the glasses region instead of xseg occlusion.
+    evidence: >-
+      none yet. Target: the blocky xseg lens edge seen in glasses_kept. Trade-off: no occluder,
+      so hands and phones in front of the face are not protected.
+    args:
+      face_swapper_model: hyperswap_1c_256
+      face_swapper_pixel_boost: 256x256
+      face_mask_types: [box, region]
+      face_parser_model: bisenet_resnet_34
+      face_mask_regions: [skin, left-eyebrow, right-eyebrow, left-eye, right-eye, nose, mouth, upper-lip, lower-lip]
