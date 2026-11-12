@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RojSwap — Local Command Builder</title>
+<style>
+  :root { color-scheme: dark light; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; line-height: 1.5; background: Canvas; color: CanvasText; }
+  header { margin-bottom: 1.5rem; }
+  h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+  .muted { opacity: .7; font-size: .9rem; }
+  form { display: grid; gap: 1rem; max-width: 42rem; }
+  label { display: grid; gap: .35rem; font-weight: 500; }
+  input, select, textarea { padding: .5rem .7rem; border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); border-radius: 6px; background: Field; color: FieldText; font: inherit; }
+  textarea { min-height: 8rem; font-family: ui-monospace, monospace; font-size: .85rem; }
+  button { padding: .6rem 1.2rem; border: 0; border-radius: 6px; background: AccentColor; color: AccentColorText; font-weight: 600; cursor: pointer; }
+  button:hover { filter: brightness(1.1); }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  pre { background: color-mix(in srgb, CanvasText 6%, Canvas); padding: 1rem; border-radius: 8px; overflow: auto; }
+  .status { font-size: .85rem; padding: .4rem .7rem; border-radius: 999px; background: color-mix(in srgb, green 15%, transparent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>RojSwap</h1>
+  <p class="muted">Evidence-gated face / character replacement — local command builder</p>
+  <span class="status">Iteration 15 · preflight + UI skeleton</span>
+</header>
+
+<form id="builder">
+  <div class="row">
+    <label>Source image(s)
+      <input type="text" id="source" placeholder="me.png me2.png" required>
+    </label>
+    <label>Target video
+      <input type="text" id="target" placeholder="nightclub.mp4" required>
+    </label>
+  </div>
+  <label>Preset
+    <select id="preset">
+      <option value="no_glasses">no_glasses (ghost, removes glasses)</option>
+      <option value="identity">identity (hyperswap 1c)</option>
+      <option value="glasses_kept">glasses_kept (xseg occlusion)</option>
+      <option value="hard_angle">hard_angle (hyperswap 1a, experimental)</option>
+      <option value="identity_codeformer">identity_codeformer (experimental)</option>
+      <option value="glasses_region">glasses_region (BiSeNet, experimental)</option>
+    </select>
+  </label>
+  <div class="row">
+    <label>Start (s)
+      <input type="number" id="start" value="0" min="0" step="0.1">
+    </label>
+    <label>Seconds
+      <input type="number" id="seconds" value="6" min="1" max="10" step="0.5">
+    </label>
+    <label>Reference frame
+      <input type="number" id="ref" value="30" min="0">
+    </label>
+  </div>
+  <label>Providers
+    <select id="providers">
+      <option value="cuda">cuda (RTX 3060)</option>
+      <option value="cpu">cpu</option>
+    </select>
+  </label>
+  <button type="button" id="build">Build dry-run command</button>
+</form>
+
+<pre id="out" hidden></pre>
+
+<script>
+const $ = id => document.getElementById(id);
+function build() {
+  const src = $('source').value.trim().split(/\s+/);
+  const tgt = $('target').value.trim();
+  const preset = $('preset').value;
+  const start = $('start').value;
+  const sec = $('seconds').value;
+  const ref = $('ref').value;
+  const prov = $('providers').value;
+  const cmd = [
+    'python pipeline/baseline.py',
+    '-s', ...src.map(s => `'${s}'`),
+    '-t', `'${tgt}'`,
+    '--start', start,
+    '--seconds', sec,
+    '--reference-frame', ref,
+    '--providers', prov,
+    '--presets', preset,
+    '--dry-run'
+  ].join(' ');
+  $('out').hidden = false;
+  $('out').textContent = cmd + '\n\n# Then drop --dry-run for real run (needs FACEFUSION_HOME)';
+}
+$('build').addEventListener('click', build);
+</script>
+</body>
+</html>
