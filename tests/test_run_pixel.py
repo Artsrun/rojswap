@@ -48,6 +48,11 @@ class PresetTest(unittest.TestCase):
         self.assertEqual(a["processors"], ["face_swapper", "face_enhancer"])
         self.assertEqual(a["face_swapper_model"], "ghost_3_256")
 
+    def test_glasses_mask_comparison_disables_enhancement(self):
+        for name in ("glasses_kept", "glasses_region"):
+            with self.subTest(preset=name):
+                self.assertEqual(self.presets[name]["args"]["processors"], ["face_swapper"])
+
     def test_reserved_key_in_preset_rejected(self):
         with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
             f.write("presets:\n  bad:\n    status: experimental\n    description: x\n    evidence: x\n"

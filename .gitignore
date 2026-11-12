@@ -9,5 +9,7 @@ tests/short_clip/*
 !eval/**/*.jpg
 
 artifacts/
+.env
+.env.*
 __pycache__/
 .venv/

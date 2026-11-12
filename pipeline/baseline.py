@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
-"""One-command pixel baseline: cut window -> FaceFusion per preset -> frame grid -> notes entry.
+"""One-command baseline + gate: cut window -> FaceFusion per preset [-> Wan 2.2] -> frame grid -> notes entry.
 
   baseline.py -s ref.png -t tests/short_clip/test.mp4 --providers cuda
   baseline.py -s ref.png -t full.mp4 --start 4 --seconds 6 --presets no_glasses identity glasses_kept
-  baseline.py ... --dry-run          # validate + print the plan, write nothing
+  baseline.py -s ref.png -t full.mp4 --start 4 --seconds 6 --diffusion          # + paid Wan row (step 7)
+  baseline.py -s ref.png -t full.mp4 --start 4 --seconds 6 --presets --diffusion  # Wan only
+  baseline.py ... --dry-run          # validate + print the plan, write nothing, spend nothing
 
-Outputs:  <out-dir>/clip.mp4, <out-dir>/<preset>.mp4   (local, gitignored)
-          eval/<date>_pixel_grid.jpg                    (row 1 = clip, then one row per preset)
+Outputs:  <out-dir>/clip.mp4, <out-dir>/<preset>.mp4, <out-dir>/wan_animate.mp4   (local, gitignored)
+          eval/<date>_pixel_grid.jpg | eval/<date>_gate_grid.jpg  (row 1 = clip, then one row per run)
           eval/notes.md                                 (run entry appended, scores left blank)
 FaceFusion lookup is run_pixel's: FACEFUSION_HOME / FACEFUSION_PYTHON or --facefusion-home.
+--diffusion uses the first -s image as character_image, needs REPLICATE_API_TOKEN, refuses windows > 10 s.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import os
 import shlex
 import sys
 import time
@@ -23,11 +27,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "pipeline"))
 sys.path.insert(0, str(ROOT / "eval"))
+import run_diffusion  # noqa: E402
 import run_pixel  # noqa: E402
 from chunk import _run, probe  # noqa: E402
 from grid import build_grid  # noqa: E402
 
 DEFAULT_PRESETS = ["no_glasses", "identity"]
+WAN_ROW = "wan_animate"
+MAX_PAID_SECONDS = 10.0  # paid run guard: the gate is a 5-8 s clip, never the full shot
 
 
 def rel(path: str) -> str:
@@ -82,9 +89,12 @@ def notes_entry(date: str, command: str, clip_info: dict, sources: list[str], gr
     rows = "\n".join(f"Row {i + 1:<5} {rel(r['video'])}  indices {r['indices']}" for i, r in enumerate(grid["rows"]))
     timing = "\n".join(f"          {r['preset']}: {r['seconds']:.0f} s total, {r['sec_per_frame']:.2f} s/frame"
                        for r in runs)
-    presets = ", ".join(r["preset"] for r in runs)
+    pixel = [r["preset"] for r in runs if r["preset"] != WAN_ROW]
+    wan = len(pixel) < len(runs)
+    path = " + ".join(["pixel"] * bool(pixel) + ["diffusion"] * wan)
+    models = "; ".join([f"FaceFusion {', '.join(pixel)}"] * bool(pixel) + [run_diffusion.MODEL_ID] * wan)
     return f"""
-### {date} — pixel — FaceFusion {presets}
+### {date} — {path} — {models}
 Input     clip {clip_info['duration']:.2f} s, {clip_info['fps']:.3f} fps, {w}x{h}, {clip_info['frames']} frames
 Reference {' '.join(map(rel, sources))}
 Command   {command}
@@ -105,11 +115,69 @@ GATE      PASS | FAIL — <one line why>
 """
 
 
+def check_plan(a: argparse.Namespace, info: dict) -> tuple[int, int]:
+    """Validate everything before any cut, render or paid call. Returns the frame window."""
+    if not a.presets and not a.diffusion:
+        raise ValueError("nothing to run: give --presets and/or --diffusion")
+    unknown = set(a.presets) - run_pixel.load_presets().keys()
+    if unknown:
+        raise ValueError(f"unknown presets {sorted(unknown)}")
+    first, last = frame_window(info, a.start, a.seconds)
+    n = last - first
+    if a.reference_frame is not None and not 0 <= a.reference_frame < n:
+        raise ValueError(f"reference frame {a.reference_frame} outside the window 0..{n - 1}")
+    if a.frames > n:
+        raise ValueError(f"grid wants {a.frames} frames, window has {n}")
+    if a.diffusion:
+        seconds = n / info["fps"]
+        if seconds > MAX_PAID_SECONDS:
+            raise ValueError(f"--diffusion window is {seconds:.1f} s; cut <= {MAX_PAID_SECONDS:g} s with --start/--seconds")
+        run_diffusion.validate_inputs(Path(a.source[0]), Path(a.target))
+        if not a.dry_run and not os.environ.get("REPLICATE_API_TOKEN"):
+            raise RuntimeError("REPLICATE_API_TOKEN is not set (needed for --diffusion)")
+    return first, last
+
+
+def print_plan(a: argparse.Namespace, info: dict, first: int, last: int, out_dir: Path, grid_path: Path) -> int:
+    n = last - first
+    print(f"window:  frames {first}..{last} ({n} frames, {n / info['fps']:.2f} s) of {a.target}")
+    for p in a.presets:
+        code = run_pixel.main(pixel_args(p, a.source, a.target, str(out_dir / f"{p}.mp4"), a,
+                                         trim=(first, last)) + ["--dry-run"])
+        if code:
+            return code
+    if a.diffusion:
+        token = "set" if os.environ.get("REPLICATE_API_TOKEN") else "NOT SET - real run will refuse"
+        print(f"wan:     {run_diffusion.MODEL_ID} @ {a.resolution}p, character {a.source[0]}, {n / info['fps']:.2f} s")
+        print(f"         cost {run_diffusion.COST_NOTES}; REPLICATE_API_TOKEN {token}")
+    print(f"grid:    {grid_path} ({1 + len(a.presets) + a.diffusion} rows x {a.frames})")
+    print(f"notes:   append to {a.notes}")
+    print("status:  plan OK, nothing written")
+    return 0
+
+
+def run_rows(a: argparse.Namespace, clip: Path, out_dir: Path, n: int) -> list[dict]:
+    """FaceFusion per preset, then the paid Wan run last so a local failure never costs money."""
+    runs = []
+    for p in a.presets + [WAN_ROW] * a.diffusion:
+        out = out_dir / f"{p}.mp4"
+        t0 = time.monotonic()
+        if p == WAN_ROW:
+            run_diffusion.real_run(Path(a.source[0]), clip, out, a.resolution)
+        elif run_pixel.main(pixel_args(p, a.source, str(clip), str(out), a)):
+            raise RuntimeError(f"preset {p} failed (see run_pixel output above)")
+        secs = time.monotonic() - t0
+        runs.append({"preset": p, "output": str(out), "seconds": secs, "sec_per_frame": secs / n})
+    return runs
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-s", "--source", nargs="+", required=True, help="reference face image(s)")
     ap.add_argument("-t", "--target", required=True, help="target video (short clip or full footage)")
-    ap.add_argument("--presets", nargs="+", default=DEFAULT_PRESETS)
+    ap.add_argument("--presets", nargs="*", default=DEFAULT_PRESETS, help="FaceFusion presets; bare flag = none")
+    ap.add_argument("--diffusion", action="store_true", help="add the paid Wan 2.2 Animate Replace row")
+    ap.add_argument("--resolution", choices=["480", "720"], default="480", help="Wan output (default 480)")
     ap.add_argument("--start", type=float, default=0.0, help="window start, seconds")
     ap.add_argument("--seconds", type=float, help="window length; default = to the end")
     ap.add_argument("--reference-frame", type=int, help="frame inside the window where the face is clear")
@@ -117,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="override for every preset")
     ap.add_argument("--frames", type=int, default=8, help="grid columns")
     ap.add_argument("--out-dir", help="default artifacts/baseline/<date>")
-    ap.add_argument("--grid", help="default eval/<date>_pixel_grid.jpg")
+    ap.add_argument("--grid", help="default eval/<date>_pixel_grid.jpg (_gate_grid.jpg with --diffusion)")
     ap.add_argument("--notes", default=str(ROOT / "eval" / "notes.md"))
     ap.add_argument("--facefusion-home")
     ap.add_argument("--facefusion-python")
@@ -126,30 +194,13 @@ def main(argv: list[str] | None = None) -> int:
 
     date = dt.date.today().isoformat()
     out_dir = Path(a.out_dir or ROOT / "artifacts" / "baseline" / date)
-    grid_path = Path(a.grid or ROOT / "eval" / f"{date}_pixel_grid.jpg")
+    grid_path = Path(a.grid or ROOT / "eval" / f"{date}_{'gate' if a.diffusion else 'pixel'}_grid.jpg")
     try:
-        unknown = set(a.presets) - run_pixel.load_presets().keys()
-        if unknown:
-            raise ValueError(f"unknown presets {sorted(unknown)}")
         info = probe(a.target)
-        first, last = frame_window(info, a.start, a.seconds)
+        first, last = check_plan(a, info)
         n = last - first
-        if a.reference_frame is not None and not 0 <= a.reference_frame < n:
-            raise ValueError(f"reference frame {a.reference_frame} outside the window 0..{n - 1}")
-        if a.frames > n:
-            raise ValueError(f"grid wants {a.frames} frames, window has {n}")
-
         if a.dry_run:
-            print(f"window:  frames {first}..{last} ({n} frames, {n / info['fps']:.2f} s) of {a.target}")
-            for p in a.presets:
-                code = run_pixel.main(pixel_args(p, a.source, a.target, str(out_dir / f"{p}.mp4"), a,
-                                                 trim=(first, last)) + ["--dry-run"])
-                if code:
-                    return code
-            print(f"grid:    {grid_path} ({1 + len(a.presets)} rows x {a.frames})")
-            print(f"notes:   append to {a.notes}")
-            print("status:  plan OK, nothing written")
-            return 0
+            return print_plan(a, info, first, last, out_dir, grid_path)
 
         out_dir.mkdir(parents=True, exist_ok=True)
         clip = out_dir / "clip.mp4"
@@ -158,15 +209,7 @@ def main(argv: list[str] | None = None) -> int:
         if clip_info["frames"] != n:
             raise RuntimeError(f"cut has {clip_info['frames']} frames, expected {n}")
 
-        runs = []
-        for p in a.presets:
-            out = out_dir / f"{p}.mp4"
-            t0 = time.monotonic()
-            if run_pixel.main(pixel_args(p, a.source, str(clip), str(out), a)):
-                raise RuntimeError(f"preset {p} failed (see run_pixel output above)")
-            secs = time.monotonic() - t0
-            runs.append({"preset": p, "output": str(out), "seconds": secs, "sec_per_frame": secs / n})
-
+        runs = run_rows(a, clip, out_dir, n)
         grid = build_grid([str(clip), *(r["output"] for r in runs)], str(grid_path), a.frames)
         command = shlex.join(["python", "pipeline/baseline.py", *(argv if argv is not None else sys.argv[1:])])
         with open(a.notes, "a", encoding="utf-8") as f:
